@@ -64,6 +64,19 @@ class MrpProduction(models.Model):
                         ).mapped('product_qty'))
             record.left_product_qty = remaining_qty
 
+    def has_inherited_attribute_values(self, product_id):
+        product = self.env['product.product'].browse(product_id)
+        attr_value_dict = {}
+        for line in self.product_attribute_ids:
+            if line.attribute_id.parent_inherited:
+                attr_value_dict[line.attribute_id] = line.value_id
+        diff_value_attr = product.product_attribute_values.mapped(
+            'attribute_id').filtered(
+                lambda x: x.attribute_id in attr_value_dict
+                and attr_value_dict[x.attribute_id] != x.value_id
+                and x.attribute_id)
+        return not diff_value_attr
+
     @api.multi
     def get_dump_packages(self):
         self.ensure_one()
@@ -75,7 +88,8 @@ class MrpProduction(models.Model):
         for line in lines:
             if line not in exist_prod:
                 packs = filter(
-                    lambda x: x not in exist_prod,
+                    lambda x: x not in exist_prod and
+                              self.has_inherited_attribute_values(x),
                     line.bom_id.product_tmpl_id.product_variant_ids.ids)
                 pack_line = map(
                     lambda x: (0, 0, {'product': x}), packs)
